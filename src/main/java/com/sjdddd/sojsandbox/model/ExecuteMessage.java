@@ -6,27 +6,25 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * 题目判题信息
+ * 进程执行信息
+ *
+ * @author 沈佳栋
+ * @Since 2024/3/11 19:28
  */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class JudgeInfo {
+public class ExecuteMessage {
 
-    /**
-     * 程序执行信息
-     */
+    private Integer exitValue;
+
     private String message;
 
-    /**
-     * 消耗内存 KB
-     */
-    private Long memory;
+    private String errorMessage;
 
-    /**
-     * 消耗时间 ms
-     */
     private Long time;
+
+    private Long memory;
 
 }
