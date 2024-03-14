@@ -71,7 +71,7 @@ public class CommonCodeSandboxTemplate
                 // 用户提交的代码执行中存在错误
                 executeCodeResponse.setStatus(QuestionSubmitStatusEnum.FAIL.getValue());
                 executeCodeResponse.setJudgeInfo(new JudgeInfo(errorMessage, null, null));
-                break;
+                return executeCodeResponse;
             }
             outputList.add(executeMessage.getMessage());
             Long time = executeMessage.getTime();

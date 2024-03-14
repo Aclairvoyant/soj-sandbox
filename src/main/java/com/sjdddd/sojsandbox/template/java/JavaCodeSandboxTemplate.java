@@ -363,7 +363,7 @@ public abstract class JavaCodeSandboxTemplate extends CommonCodeSandboxTemplate 
         if (compileFileExecuteMessage.getErrorMessage() != null)
         {
             // 返回编译错误信息
-            return new ExecuteCodeResponse(null, compileFileExecuteMessage.getMessage(), QuestionSubmitStatusEnum.FAIL.getValue(), new JudgeInfo(compileFileExecuteMessage.getErrorMessage(), null, null));
+            return new ExecuteCodeResponse(null, compileFileExecuteMessage.getMessage(), QuestionSubmitStatusEnum.FAIL.getValue(), new JudgeInfo(JudgeInfoMessageEnum.COMPILE_ERROR.getValue(), null, null));
         }
 
         // 3. 执行代码，得到输出结果
@@ -431,10 +431,12 @@ public abstract class JavaCodeSandboxTemplate extends CommonCodeSandboxTemplate 
         {
             // 安全控制：限制资源分配：最大队资源大小：256MB
             // 安全控制：配置安全管理器：java.lang.SecurityManager
-            String runCmd = String.format("java -Xmx256m -Dfile.encoding=UTF-8 -cp %s;%s -Djava.security.manager=%s Main %s", userCodeParentPath, SECURITY_MANAGER_PATH, SECURITY_MANAGER_CLASS_NAME, inputArgs);
+            String runCmd = String.format("java -Xmx256m -Dfile.encoding=UTF-8 -cp %s;%s -Djava.security=%s Main %s", userCodeParentPath, SECURITY_MANAGER_PATH, SECURITY_MANAGER_CLASS_NAME, inputArgs);
+            log.info("=================================================");
+            log.info(runCmd);
             String osName = System.getProperty("os.name").toLowerCase();
             // 如果是Windows系统，支持安全管理器security-manager的创建，反之是Linux则不支持（可能也支持，但作者暂时因时间原因未找出对策，故出此下策）
-            if (osName.contains("nix") || osName.contains("nux"))
+            if (osName.contains("nix") || osName.contains("nux") || osName.contains("mac"))
             {
                 runCmd = String.format("java -Xmx256m -Dfile.encoding=UTF-8 -cp %s Main %s", userCodeParentPath, inputArgs);
             }
@@ -449,6 +451,7 @@ public abstract class JavaCodeSandboxTemplate extends CommonCodeSandboxTemplate 
                     {
                         Thread.sleep(TIME_OUT);
                         System.out.println("超过程序最大运行时间，终止进程");
+
                         runProcess.destroy();
                     }
                     catch (InterruptedException e)

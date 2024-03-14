@@ -65,6 +65,15 @@ public abstract class CppCodeSandboxTemplate extends CommonCodeSandboxTemplate i
         // 保存用户的代码为文件
         File userCodeFile = saveCodeToFile(code, GLOBAL_CODE_DIR_NAME, GLOBAL_CPP_FILE_NAME);
 
+        // 2. 编译代码，得到 class 文件
+        ExecuteMessage compileFileExecuteMessage = compileFile(userCodeFile);
+        System.out.println("编译结果：" + compileFileExecuteMessage);
+        if (compileFileExecuteMessage.getErrorMessage() != null)
+        {
+            // 返回编译错误信息
+            return new ExecuteCodeResponse(null, compileFileExecuteMessage.getMessage(), QuestionSubmitStatusEnum.FAIL.getValue(), new JudgeInfo(compileFileExecuteMessage.getErrorMessage(), null, null));
+        }
+
         // 执行代码，获取输出结果
         List<ExecuteMessage> executeMessageList = runFile(userCodeFile, inputList);
 
@@ -80,34 +89,70 @@ public abstract class CppCodeSandboxTemplate extends CommonCodeSandboxTemplate i
         return outputResponse;
     }
 
+    /**
+     * 编译代码
+     *
+     * @param userCodeFile
+     * @return
+     */
+    public ExecuteMessage compileFile(File userCodeFile)
+    {
+//        String compileCmd = String.format("javac -encoding utf-8 %s", userCodeFile.getAbsolutePath());
+        String executableFilePath = userCodeFile.getAbsolutePath().replace(".cpp", "");
+        String compileCommand = String.format("g++ -fno-asm -Wall -lm -std=c++14 -o %s %s", executableFilePath, userCodeFile.getAbsolutePath());
+        try
+        {
+            Process compileProcess = Runtime.getRuntime().exec(compileCommand);
+            ExecuteMessage executeMessage = ProcessUtils.runProcessAndGetMessage(compileProcess, "编译");
+            // 编译失败
+            if (executeMessage.getExitValue() != 0)
+            {
+                executeMessage.setExitValue(1);
+                executeMessage.setMessage(JudgeInfoMessageEnum.COMPILE_ERROR.getText());
+                executeMessage.setErrorMessage(JudgeInfoMessageEnum.COMPILE_ERROR.getValue());
+            }
+            return executeMessage;
+        }
+        catch (Exception e)
+        {
+            // 未知错误
+            ExecuteMessage executeMessage = new ExecuteMessage();
+            executeMessage.setExitValue(1);
+            executeMessage.setMessage(e.getMessage());
+            executeMessage.setErrorMessage(JudgeInfoMessageEnum.SYSTEM_ERROR.getValue());
+            return executeMessage;
+        }
+    }
+
     public List<ExecuteMessage> runFile(File userCodeFile, List<String> inputList) {
         List<ExecuteMessage> executeMessageList = new ArrayList<>();
         String executableFilePath = userCodeFile.getAbsolutePath().replace(".cpp", "");
-
-        // 编译C++代码
-        String compileCommand = String.format("g++ -std=c++14 -o %s %s", executableFilePath, userCodeFile.getAbsolutePath());
-        try {
-            Process compileProcess = new ProcessBuilder("bash", "-c", compileCommand).start();
-            int compileExitCode = compileProcess.waitFor();
-            if (compileExitCode != 0) {
-                // 编译失败，收集错误信息
-                String errorMessage = readStream(compileProcess.getErrorStream());
-                executeMessageList.add(ExecuteMessage.builder()
-                        .exitValue(1)
-                        .message(errorMessage)
-                        .errorMessage(JudgeInfoMessageEnum.COMPILE_ERROR.getValue())
-                        .build());
-                return executeMessageList;
-            }
-        } catch (IOException | InterruptedException e) {
-            e.printStackTrace();
-            executeMessageList.add(ExecuteMessage.builder()
-                    .exitValue(1)
-                    .message(e.getMessage())
-                    .errorMessage(JudgeInfoMessageEnum.SYSTEM_ERROR.getValue())
-                    .build());
-            return executeMessageList;
-        }
+//
+//        // 编译C++代码
+////        String compileCommand = String.format("g++ -std=c++14 -o %s %s", executableFilePath, userCodeFile.getAbsolutePath());
+//        String compileCommand = String.format("g++ -fno-asm -Wall -lm -std=c++14 -o %s %s", executableFilePath, userCodeFile.getAbsolutePath());
+//        try {
+//            Process compileProcess = new ProcessBuilder("bash", "-c", compileCommand).start();
+//            int compileExitCode = compileProcess.waitFor();
+//            if (compileExitCode != 0) {
+//                // 编译失败，收集错误信息
+//                String errorMessage = readStream(compileProcess.getErrorStream());
+//                executeMessageList.add(ExecuteMessage.builder()
+//                        .exitValue(1)
+//                        .message(errorMessage)
+//                        .errorMessage(JudgeInfoMessageEnum.COMPILE_ERROR.getValue())
+//                        .build());
+//                return executeMessageList;
+//            }
+//        } catch (IOException | InterruptedException e) {
+//            e.printStackTrace();
+//            executeMessageList.add(ExecuteMessage.builder()
+//                    .exitValue(1)
+//                    .message(e.getMessage())
+//                    .errorMessage(JudgeInfoMessageEnum.SYSTEM_ERROR.getValue())
+//                    .build());
+//            return executeMessageList;
+//        }
 
         // 对每个输入执行编译后的程序并收集结果
         for (String input : inputList) {
