@@ -3,8 +3,6 @@ package com.sjdddd.sojsandbox.template.java;
 import com.sjdddd.sojsandbox.model.ExecuteCodeRequest;
 import com.sjdddd.sojsandbox.model.ExecuteCodeResponse;
 import com.sjdddd.sojsandbox.model.JudgeInfo;
-import com.sjdddd.sojsandbox.template.cpp.CppCodeSandboxTemplate;
-import jdk.jfr.internal.tool.Main;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import java.util.Arrays;

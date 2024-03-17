@@ -1,9 +1,12 @@
-package com.sjdddd.sojsandbox.template.cpp;
+package com.sjdddd.sojsandbox.template.c;
 
 import cn.hutool.dfa.FoundWord;
 import cn.hutool.dfa.WordTree;
 import com.sjdddd.sojsandbox.CodeSandBox;
-import com.sjdddd.sojsandbox.model.*;
+import com.sjdddd.sojsandbox.model.ExecuteCodeRequest;
+import com.sjdddd.sojsandbox.model.ExecuteCodeResponse;
+import com.sjdddd.sojsandbox.model.ExecuteMessage;
+import com.sjdddd.sojsandbox.model.JudgeInfo;
 import com.sjdddd.sojsandbox.model.enums.JudgeInfoMessageEnum;
 import com.sjdddd.sojsandbox.model.enums.QuestionSubmitStatusEnum;
 import com.sjdddd.sojsandbox.template.CommonCodeSandboxTemplate;
@@ -17,34 +20,38 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * C++ 代码沙箱模板方法的实现
+ * C 代码沙箱模板方法的实现
  */
 @Slf4j
-public abstract class CppCodeSandboxTemplate extends CommonCodeSandboxTemplate implements CodeSandBox {
+public abstract class CCodeSandboxTemplate extends CommonCodeSandboxTemplate implements CodeSandBox {
 
-    private static final String GLOBAL_CODE_DIR_NAME = "tmpCodeCpp";
-    private static final String GLOBAL_CPP_FILE_NAME = "Main.cpp";
+    private static final String GLOBAL_CODE_DIR_NAME = "tmpCodeC";
+    private static final String GLOBAL_C_FILE_NAME = "Main.c";
     private static final long TIME_OUT = 15000L;
 
-    // C++代码黑名单，仅供参考，实际情况下需要根据C++的特性进行定制
-    private static final List<String> blackList = Arrays.asList(
-            // 潜在的危险系统调用
-            "system", "exec", "fork",
-            // 文件操作
-            "fstream", "ofstream", "ifstream",
-            // 动态内存分配
+    // C代码黑名单，仅供参考，实际情况下需要根据C的特性进行定制
+
+    private static final List<String> blackListC = Arrays.asList(
+            // 系统调用
+            "system",
+            // 动态内存管理
             "malloc", "calloc", "realloc", "free",
-            // 线程和进程
-            "thread", "pthread_create",
-            // 其他
-            "remove", "rename"
+            // 文件操作
+            "fopen", "fclose", "fwrite", "fread", "fseek",
+            // 进程操作
+            "fork", "exec",
+            // 网络操作
+            "socket",
+            // 其他潜在危险函数
+            "popen", "system", "unlink"
     );
+
 
     private static final WordTree WORD_TREE;
 
     static {
         WORD_TREE = new WordTree();
-        WORD_TREE.addWords(blackList);
+        WORD_TREE.addWords(blackListC);
     }
 
     @Override
@@ -63,7 +70,7 @@ public abstract class CppCodeSandboxTemplate extends CommonCodeSandboxTemplate i
         }
 
         // 保存用户的代码为文件
-        File userCodeFile = saveCodeToFile(code, GLOBAL_CODE_DIR_NAME, GLOBAL_CPP_FILE_NAME);
+        File userCodeFile = saveCodeToFile(code, GLOBAL_CODE_DIR_NAME, GLOBAL_C_FILE_NAME);
 
         // 2. 编译代码，得到 class 文件
         ExecuteMessage compileFileExecuteMessage = compileFile(userCodeFile);
@@ -97,8 +104,8 @@ public abstract class CppCodeSandboxTemplate extends CommonCodeSandboxTemplate i
      */
     public ExecuteMessage compileFile(File userCodeFile)
     {
-        String executableFilePath = userCodeFile.getAbsolutePath().replace(".cpp", "");
-        String compileCommand = String.format("g++ -fno-asm -Wall -lm -std=c++14 -o %s %s", executableFilePath, userCodeFile.getAbsolutePath());
+        String executableFilePath = userCodeFile.getAbsolutePath().replace(".c", "");
+        String compileCommand = String.format("gcc -fno-asm -Wall -lm -std=c11 -o %s %s", executableFilePath, userCodeFile.getAbsolutePath());
         try
         {
             Process compileProcess = Runtime.getRuntime().exec(compileCommand);
@@ -125,7 +132,7 @@ public abstract class CppCodeSandboxTemplate extends CommonCodeSandboxTemplate i
 
     public List<ExecuteMessage> runFile(File userCodeFile, List<String> inputList) {
         List<ExecuteMessage> executeMessageList = new ArrayList<>();
-        String executableFilePath = userCodeFile.getAbsolutePath().replace(".cpp", "");
+        String executableFilePath = userCodeFile.getAbsolutePath().replace(".c", ".exe");
 
         // 对每个输入执行编译后的程序并收集结果
         for (String input : inputList) {

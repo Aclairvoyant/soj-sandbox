@@ -237,9 +237,11 @@ import com.sjdddd.sojsandbox.utils.ProcessUtils;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Java 代码沙箱模板方法的实现
@@ -253,7 +255,7 @@ public abstract class JavaCodeSandboxTemplate extends CommonCodeSandboxTemplate 
     /**
      * 待运行代码的文件夹路径名称
      */
-    private static final String GLOBAL_CODE_DIR_NAME = "tmpCode";
+    private static final String GLOBAL_CODE_DIR_NAME = "tmpCodeJava";
 
     /**
      * 待运行代码的存放文件名
@@ -427,56 +429,59 @@ public abstract class JavaCodeSandboxTemplate extends CommonCodeSandboxTemplate 
         String userCodeParentPath = userCodeFile.getParentFile().getAbsolutePath();
 
         List<ExecuteMessage> executeMessageList = new ArrayList<>();
-        for (String inputArgs : inputList)
+        for (String input : inputList)
         {
             // 安全控制：限制资源分配：最大队资源大小：256MB
             // 安全控制：配置安全管理器：java.lang.SecurityManager
-            String runCmd = String.format("java -Xmx256m -Dfile.encoding=UTF-8 -cp %s;%s -Djava.security=%s Main %s", userCodeParentPath, SECURITY_MANAGER_PATH, SECURITY_MANAGER_CLASS_NAME, inputArgs);
-            log.info("=================================================");
-            log.info(runCmd);
+            String runCmd = String.format("java -Xmx256m -Dfile.encoding=UTF-8 -cp %s;%s -Djava.security=%s Main %s", userCodeParentPath, SECURITY_MANAGER_PATH, SECURITY_MANAGER_CLASS_NAME, input);
             String osName = System.getProperty("os.name").toLowerCase();
             // 如果是Windows系统，支持安全管理器security-manager的创建，反之是Linux则不支持（可能也支持，但作者暂时因时间原因未找出对策，故出此下策）
             if (osName.contains("nix") || osName.contains("nux") || osName.contains("mac"))
             {
-                runCmd = String.format("java -Xmx256m -Dfile.encoding=UTF-8 -cp %s Main %s", userCodeParentPath, inputArgs);
+                runCmd = String.format("java -Xmx256m -Dfile.encoding=UTF-8 -cp %s Main %s", userCodeParentPath, input);
             }
-            // String runCmd = String.format("java -Dfile.encoding=UTF-8 -cp %s;%s -Djava.security.manager=%s Main %s", userCodeParentPath, SECURITY_MANAGER_PATH, SECURITY_MANAGER_CLASS_NAME, inputArgs);
-            try
-            {
+            // String runCmd = String.format("java -Dfile.encoding=UTF-8 -cp %s;%s -Djava.security.manager=%s Main %s", userCodeParentPath, SECURITY_MANAGER_PATH, SECURITY_MANAGER_CLASS_NAME, input);
+            String executableFilePath = userCodeFile.getAbsolutePath().replace(".java", "");
+            try {
+                ProcessBuilder processBuilder = new ProcessBuilder(executableFilePath);
+                processBuilder.redirectErrorStream(true); // 合并标准错误和标准输出
                 Process runProcess = Runtime.getRuntime().exec(runCmd);
-                // 安全控制：限制最大运行时间，超时控制
-                new Thread(() ->
-                {
-                    try
-                    {
-                        Thread.sleep(TIME_OUT);
-                        System.out.println("超过程序最大运行时间，终止进程");
 
-                        runProcess.destroy();
-                    }
-                    catch (InterruptedException e)
-                    {
-                        throw new RuntimeException(e);
-                    }
-                }).start();
+                // 向程序输入数据
+                if (input != null) {
+                    runProcess.getOutputStream().write(input.getBytes());
+                    runProcess.getOutputStream().flush();
+                    runProcess.getOutputStream().close();
+                }
+
+                // 等待程序执行完成或超时
+                boolean finished = runProcess.waitFor(TIME_OUT, TimeUnit.MILLISECONDS);
+                if (!finished) {
+                    // 超时处理
+                    runProcess.destroy();
+                    executeMessageList.add(ExecuteMessage.builder()
+                            .exitValue(1)
+                            .message("Time Limit Exceeded")
+                            .errorMessage(JudgeInfoMessageEnum.TIME_LIMIT_EXCEEDED.getValue())
+                            .build());
+                    continue;
+                }
                 ExecuteMessage executeMessage = ProcessUtils.runProcessAndGetMessage(runProcess, "运行");
                 System.out.println("本次运行结果：" + executeMessage);
-                if (executeMessage.getExitValue() != 0)
-                {
+                if (executeMessage.getExitValue() != 0) {
                     executeMessage.setExitValue(1);
                     executeMessage.setMessage(JudgeInfoMessageEnum.RUNTIME_ERROR.getText());
                     executeMessage.setErrorMessage(JudgeInfoMessageEnum.RUNTIME_ERROR.getValue());
                 }
                 executeMessageList.add(executeMessage);
-            }
-            catch (Exception e)
-            {
-                // 未知错误
-                ExecuteMessage executeMessage = new ExecuteMessage();
-                executeMessage.setExitValue(1);
-                executeMessage.setMessage(e.getMessage());
-                executeMessage.setErrorMessage(JudgeInfoMessageEnum.SYSTEM_ERROR.getValue());
-                executeMessageList.add(executeMessage);
+
+            } catch (IOException | InterruptedException e) {
+                e.printStackTrace();
+                executeMessageList.add(ExecuteMessage.builder()
+                        .exitValue(1)
+                        .message(e.getMessage())
+                        .errorMessage(JudgeInfoMessageEnum.SYSTEM_ERROR.getValue())
+                        .build());
             }
         }
         return executeMessageList;

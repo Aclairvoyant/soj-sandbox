@@ -1,4 +1,4 @@
-package com.sjdddd.sojsandbox.template.cpp;
+package com.sjdddd.sojsandbox.template.go;
 
 import cn.hutool.dfa.FoundWord;
 import cn.hutool.dfa.WordTree;
@@ -10,41 +10,36 @@ import com.sjdddd.sojsandbox.template.CommonCodeSandboxTemplate;
 import com.sjdddd.sojsandbox.utils.ProcessUtils;
 import lombok.extern.slf4j.Slf4j;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * C++ 代码沙箱模板方法的实现
+ * Go 代码沙箱模板方法的实现
  */
 @Slf4j
-public abstract class CppCodeSandboxTemplate extends CommonCodeSandboxTemplate implements CodeSandBox {
+public abstract class GoCodeSandboxTemplate extends CommonCodeSandboxTemplate implements CodeSandBox {
 
-    private static final String GLOBAL_CODE_DIR_NAME = "tmpCodeCpp";
-    private static final String GLOBAL_CPP_FILE_NAME = "Main.cpp";
+    private static final String GLOBAL_CODE_DIR_NAME = "tmpCodeGo";
+    private static final String GLOBAL_GO_FILE_NAME = "Main.go";
     private static final long TIME_OUT = 15000L;
 
-    // C++代码黑名单，仅供参考，实际情况下需要根据C++的特性进行定制
-    private static final List<String> blackList = Arrays.asList(
-            // 潜在的危险系统调用
-            "system", "exec", "fork",
-            // 文件操作
-            "fstream", "ofstream", "ifstream",
-            // 动态内存分配
-            "malloc", "calloc", "realloc", "free",
-            // 线程和进程
-            "thread", "pthread_create",
-            // 其他
-            "remove", "rename"
+    // Go代码黑名单，仅供参考，实际情况下需要根据Go的特性进行定制
+    private static final List<String> blackListGo = Arrays.asList(
+        "os/exec",
+        "net/http", "net",
+        "io/ioutil", "os",
+        "reflect"
     );
 
     private static final WordTree WORD_TREE;
 
     static {
         WORD_TREE = new WordTree();
-        WORD_TREE.addWords(blackList);
+        WORD_TREE.addWords(blackListGo);
     }
 
     @Override
@@ -62,21 +57,14 @@ public abstract class CppCodeSandboxTemplate extends CommonCodeSandboxTemplate i
                     QuestionSubmitStatusEnum.FAIL.getValue(), new JudgeInfo(JudgeInfoMessageEnum.DANGEROUS_OPERATION.getValue(), null, null));
         }
 
-        // 保存用户的代码为文件
-        File userCodeFile = saveCodeToFile(code, GLOBAL_CODE_DIR_NAME, GLOBAL_CPP_FILE_NAME);
-
-        // 2. 编译代码，得到 class 文件
-        ExecuteMessage compileFileExecuteMessage = compileFile(userCodeFile);
-        System.out.println("编译结果：" + compileFileExecuteMessage);
-        if (compileFileExecuteMessage.getErrorMessage() != null)
-        {
-            // 返回编译错误信息
-            return new ExecuteCodeResponse(null, compileFileExecuteMessage.getMessage(), QuestionSubmitStatusEnum.FAIL.getValue(), new JudgeInfo(compileFileExecuteMessage.getErrorMessage(), null, null));
+        // Go的编译和执行逻辑
+        File userCodeFile = saveCodeToFile(executeCodeRequest.getCode(), GLOBAL_CODE_DIR_NAME, GLOBAL_GO_FILE_NAME);
+        ExecuteMessage compileMessage = compileFile(userCodeFile);
+        if (compileMessage.getErrorMessage() != null) {
+            return new ExecuteCodeResponse(null, compileMessage.getMessage(), QuestionSubmitStatusEnum.FAIL.getValue(), new JudgeInfo(compileMessage.getErrorMessage(), null, null));
         }
 
-        // 执行代码，获取输出结果
         List<ExecuteMessage> executeMessageList = runFile(userCodeFile, inputList);
-
         // 整理输出结果
         ExecuteCodeResponse outputResponse = getOutputResponse(executeMessageList);
 
@@ -89,18 +77,12 @@ public abstract class CppCodeSandboxTemplate extends CommonCodeSandboxTemplate i
         return outputResponse;
     }
 
-    /**
-     * 编译代码
-     *
-     * @param userCodeFile
-     * @return
-     */
-    public ExecuteMessage compileFile(File userCodeFile)
-    {
-        String executableFilePath = userCodeFile.getAbsolutePath().replace(".cpp", "");
-        String compileCommand = String.format("g++ -fno-asm -Wall -lm -std=c++14 -o %s %s", executableFilePath, userCodeFile.getAbsolutePath());
-        try
-        {
+    public ExecuteMessage compileFile(File userCodeFile) {
+        // Go编译逻辑
+        String executableFilePath = userCodeFile.getAbsolutePath().replace(".go", "");
+        String compileCommand = String.format("go build -o %s %s", executableFilePath, userCodeFile.getAbsolutePath());
+
+        try {
             Process compileProcess = Runtime.getRuntime().exec(compileCommand);
             ExecuteMessage executeMessage = ProcessUtils.runProcessAndGetMessage(compileProcess, "编译");
             // 编译失败
@@ -111,9 +93,7 @@ public abstract class CppCodeSandboxTemplate extends CommonCodeSandboxTemplate i
                 executeMessage.setErrorMessage(JudgeInfoMessageEnum.COMPILE_ERROR.getValue());
             }
             return executeMessage;
-        }
-        catch (Exception e)
-        {
+        } catch (Exception e) {
             // 未知错误
             ExecuteMessage executeMessage = new ExecuteMessage();
             executeMessage.setExitValue(1);
@@ -125,11 +105,18 @@ public abstract class CppCodeSandboxTemplate extends CommonCodeSandboxTemplate i
 
     public List<ExecuteMessage> runFile(File userCodeFile, List<String> inputList) {
         List<ExecuteMessage> executeMessageList = new ArrayList<>();
-        String executableFilePath = userCodeFile.getAbsolutePath().replace(".cpp", "");
+        String executableFilePath = userCodeFile.getAbsolutePath().replace(".go", "");
+
+//        String osName = System.getProperty("os.name").toLowerCase();
+//        if (osName.contains("nix") || osName.contains("nux") || osName.contains("mac"))
+//        {
+//            executableFilePath = userCodeFile.getAbsolutePath().replace(".go", "");
+//        }
 
         // 对每个输入执行编译后的程序并收集结果
         for (String input : inputList) {
             try {
+
                 ProcessBuilder processBuilder = new ProcessBuilder(executableFilePath);
                 processBuilder.redirectErrorStream(true); // 合并标准错误和标准输出
                 Process runProcess = processBuilder.start();
@@ -175,14 +162,4 @@ public abstract class CppCodeSandboxTemplate extends CommonCodeSandboxTemplate i
         return executeMessageList;
     }
 
-    private String readStream(InputStream inputStream) throws IOException {
-        StringBuilder output = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                output.append(line).append("\n");
-            }
-        }
-        return output.toString().trim();
-    }
 }

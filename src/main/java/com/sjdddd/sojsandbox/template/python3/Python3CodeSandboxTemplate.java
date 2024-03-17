@@ -11,9 +11,11 @@ import com.sjdddd.sojsandbox.utils.ProcessUtils;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Python3 代码沙箱模板方法的实现
@@ -27,7 +29,7 @@ public abstract class Python3CodeSandboxTemplate extends CommonCodeSandboxTempla
     /**
      * 待运行代码的文件夹路径名称
      */
-    private static final String GLOBAL_CODE_DIR_NAME = "tmpCode";
+    private static final String GLOBAL_CODE_DIR_NAME = "tmpCodePython";
 
     /**
      * 待运行代码的存放文件名
@@ -89,7 +91,7 @@ public abstract class Python3CodeSandboxTemplate extends CommonCodeSandboxTempla
             "os.environ['SOME_VAR']", "os.putenv('SOME_VAR', 'value')",
 
             // 不安全的输入
-            "input", "raw_input",
+//            "input", "raw_input",
 
             // 不安全的字符串拼接
             "eval(f'expr {var}')", "var = var1 + var2",
@@ -211,7 +213,7 @@ public abstract class Python3CodeSandboxTemplate extends CommonCodeSandboxTempla
             System.out.println("安全控制后的代码：\n" + code);
         }
         // 1. 把用户的代码保存为文件
-        File userCodeFile = saveCodeToFile(code, GLOBAL_CODE_DIR_NAME, GLOBAL_CODE_DIR_NAME);
+        File userCodeFile = saveCodeToFile(code, GLOBAL_CODE_DIR_NAME, GLOBAL_PYTHON_FILE_NAME);
 
         // 2. 执行代码，得到输出结果
         List<ExecuteMessage> executeMessageList = runFile(userCodeFile, inputList);
@@ -249,46 +251,52 @@ public abstract class Python3CodeSandboxTemplate extends CommonCodeSandboxTempla
             pythonCmdPrefix = "python";
         }
         List<ExecuteMessage> executeMessageList = new ArrayList<>();
-        for (String inputArgs : inputList)
-        {
-            String runCmd = String.format("%s %s %s", pythonCmdPrefix, userCodeFileAbsolutePath, inputArgs);
-            try
-            {
+        String executableFilePath = userCodeFile.getAbsolutePath().replace(".py", "");
+        for (String input : inputList) {
+            try {
+                String runCmd = String.format("%s %s %s", pythonCmdPrefix, userCodeFileAbsolutePath, input);
+                ProcessBuilder processBuilder = new ProcessBuilder(executableFilePath);
+                processBuilder.redirectErrorStream(true); // 合并标准错误和标准输出
                 Process runProcess = Runtime.getRuntime().exec(runCmd);
-                // 安全控制：限制最大运行时间，超时控制
-                new Thread(() ->
-                {
-                    try
-                    {
-                        Thread.sleep(TIME_OUT);
-                        System.out.println("超过程序最大运行时间，终止进程");
-                        runProcess.destroy();
-                    }
-                    catch (InterruptedException e)
-                    {
-                        throw new RuntimeException(e);
-                    }
-                }).start();
+
+                // 向程序输入数据
+                if (input != null) {
+                    runProcess.getOutputStream().write(input.getBytes());
+                    runProcess.getOutputStream().flush();
+                    runProcess.getOutputStream().close();
+                }
+
+                // 等待程序执行完成或超时
+                boolean finished = runProcess.waitFor(TIME_OUT, TimeUnit.MILLISECONDS);
+                if (!finished) {
+                    // 超时处理
+                    runProcess.destroy();
+                    executeMessageList.add(ExecuteMessage.builder()
+                            .exitValue(1)
+                            .message("Time Limit Exceeded")
+                            .errorMessage(JudgeInfoMessageEnum.TIME_LIMIT_EXCEEDED.getValue())
+                            .build());
+                    continue;
+                }
                 ExecuteMessage executeMessage = ProcessUtils.runProcessAndGetMessage(runProcess, "运行");
                 System.out.println("本次运行结果：" + executeMessage);
-                if (executeMessage.getExitValue() != 0)
-                {
+                if (executeMessage.getExitValue() != 0) {
                     executeMessage.setExitValue(1);
                     executeMessage.setMessage(JudgeInfoMessageEnum.RUNTIME_ERROR.getText());
                     executeMessage.setErrorMessage(JudgeInfoMessageEnum.RUNTIME_ERROR.getValue());
                 }
                 executeMessageList.add(executeMessage);
-            }
-            catch (Exception e)
-            {
-                // 未知错误
-                ExecuteMessage executeMessage = new ExecuteMessage();
-                executeMessage.setExitValue(1);
-                executeMessage.setMessage(e.getMessage());
-                executeMessage.setErrorMessage(JudgeInfoMessageEnum.SYSTEM_ERROR.getValue());
-                executeMessageList.add(executeMessage);
+
+            } catch (IOException | InterruptedException e) {
+                e.printStackTrace();
+                executeMessageList.add(ExecuteMessage.builder()
+                        .exitValue(1)
+                        .message(e.getMessage())
+                        .errorMessage(JudgeInfoMessageEnum.SYSTEM_ERROR.getValue())
+                        .build());
             }
         }
+
         return executeMessageList;
     }
 }

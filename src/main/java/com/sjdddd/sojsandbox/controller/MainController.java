@@ -2,8 +2,10 @@ package com.sjdddd.sojsandbox.controller;
 
 import com.sjdddd.sojsandbox.model.ExecuteCodeRequest;
 import com.sjdddd.sojsandbox.model.ExecuteCodeResponse;
+import com.sjdddd.sojsandbox.template.c.CNativeCodeSandbox;
 import com.sjdddd.sojsandbox.template.cpp.CppCodeSandboxTemplate;
 import com.sjdddd.sojsandbox.template.cpp.CppNativeCodeSandbox;
+import com.sjdddd.sojsandbox.template.go.GoNativeCodeSandbox;
 import com.sjdddd.sojsandbox.template.java.JavaCodeSandboxTemplate;
 import com.sjdddd.sojsandbox.template.java.JavaNativeCodeSandbox;
 import com.sjdddd.sojsandbox.template.python3.Python3CodeSandboxTemplate;
@@ -38,6 +40,12 @@ public class MainController {
     @Resource
     private CppNativeCodeSandbox cppNativeCodeSandbox;
 
+    @Resource
+    private CNativeCodeSandbox cNativeCodeSandbox;
+
+    @Resource
+    private GoNativeCodeSandbox goNativeCodeSandbox;
+
 
     @GetMapping("/health")
     public String health() {
@@ -65,6 +73,10 @@ public class MainController {
             return python3Native3CodeSandbox.executeCode(executeCodeRequest);
         } else if ("cpp".equals(language)) {
             return cppNativeCodeSandbox.executeCode(executeCodeRequest);
+        } else if ("go".equals(language)) {
+            return goNativeCodeSandbox.executeCode(executeCodeRequest);
+        } else if ("c".equals(language)) {
+            return cNativeCodeSandbox.executeCode(executeCodeRequest);
         } else {
             throw new RuntimeException("不支持的语言");
         }
